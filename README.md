@@ -354,7 +354,10 @@ smartlapse/
 
 Things that look off or are stale. Answer them here once checked.
 
-Nothing open right now.
+- [ ] **Part cooling:** did the fan pin swap on 2026-10-12 fix the weak cooling from the Sept 30 log?
+- [ ] **Heated bed:** what was wrong with it back in September, and is it sorted?
+- [ ] **Y redesign:** is the C$180 redesign done, or is the motor swap all that happened so far?
+- [ ] **Z tensioner:** did the one from the Sept 29 log get installed?
 
 **Answered**
 - [x] **`max_velocity: 3000`** was a typo, fixed to 300 on the Pi. (2026-10-12)
@@ -374,7 +377,7 @@ Nothing open right now.
 
 ## 13. Change log
 
-Reconstructed from the backup history, so dates are backup times and can lag the real change by a few hours. Newest first. Add new entries at the top.
+From 2026-10-02 on, reconstructed from the backup history, so dates are backup times and can lag the real change by a few hours. Earlier entries come from the engineer's logs (section 16). Newest first. Add new entries at the top.
 
 | Date | Change |
 |---|---|
@@ -392,6 +395,9 @@ Reconstructed from the backup history, so dates are backup times and can lag the
 | 2026-10-04 | `Z_TILT_ADJUST` added to `PRINT_START`, extruder 0.75 to 0.8 A, controller fan tweaks |
 | 2026-10-03 | Y current 0.9 to 1.2 A (probably when the 17HS8401S went in), Y full StealthChop |
 | 2026-10-02 | KAMP added, `M_PURGE` and `SMART_PARK` in `PRINT_START`, Z re-home after soak. First backup |
+| 2026-09-29 | New Z axis part installed |
+| 2026-09-26 | Z tilt set up, EBB42 mounted on the toolhead |
+| 2026-09-23 | Wiring redone (with Wagos) |
 
 ---
 
@@ -411,4 +417,28 @@ Keep a short note of every issue so future you (and any AI) can spot patterns.
 
 | Date | Symptom | Cause | Fix |
 |---|---|---|---|
-| | | | |
+| 2026-09-30 | Weak part cooling, cause unknown at the time | ❓ Possibly the part fan and hotend fan pins being swapped in the config | Pins swapped on 2026-10-12 (part fan now `ebb:PA0`). Confirm it helped |
+| 2026-09-26 | Y motor not powerful enough | Original 42-34 too weak for the bed | Swapped to a 17HS8401S, run at 1.2 A |
+| 2026-09-22 | Couldn't print anything big. Y axis and heated bed were the weak spots | Y motor (see above). ❓ Heated bed cause not recorded | Y redesign started. Bed max temp later set to 90 °C (2026-10-10) |
+
+---
+
+## 16. Engineer's logs
+
+Handwritten logs from before the config backups started, transcribed (spelling tidied up). Year assumed to be 2026. Add new entries at the bottom.
+
+**Sept 22nd**
+Printer worked, ish. Can't print anything too big. Thinking of going directly to the Y axis refactor. This is because most of the other axes are working, but the Y and heatbed aren't. Extruder is great btw!
+
+**Sept 23rd**
+I'm not entirely sure if I will buy the Z axis part, to focus on the Y axis now. Wiring was redone today. It's great! I might need some extra 14 AWG wire. I love Wagos!
+
+**Sept 26th**
+Mimi has been working great! New wiring is flawless, Z tilt is done, EBB is mounted. We're at the Y redesign stage. Around C$180 to buy everything for it. Will do after the first week of Oct.
+**Important:** Y axis motor does need to be replaced. It is not powerful enough!
+
+**Sept 29th**
+New Z axis part is very good! I continue looking for a Z tensioner and I might have found it! I might need some extra hardware (urgent) but I'm not sure yet. Next step is the Y axis, soon to be done too!
+
+**Sept 30th**
+Almost everything goes well BUT part cooling, and I don't know why yet! I might have to change the fan or something.
