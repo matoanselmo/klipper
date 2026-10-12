@@ -237,7 +237,7 @@ Retraction is tuned live with `SET_RETRACTION`, so the file values may lag what'
 | Saved full mesh | Profile `default` (don't overwrite it) |
 | Z tilt | Motors at (260,45) and (-30,45), probes (20,95) and (185,95), 5 retries, 0.03 mm tolerance |
 
-The `default` mesh shows the bed rising about 0.8 mm from front to back.
+The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from front to back, which is why the mesh is a dense 10×10 and runs fresh before every print.
 
 ---
 
@@ -357,6 +357,10 @@ Things that look off or are stale. Answer them here once checked.
 Nothing open right now.
 
 **Answered**
+- [x] **Part cooling (Sept 30 log):** fixed by changing the fan duct. The fan pin swap was unrelated. (2026-10-12)
+- [x] **Heated bed (Sept 22 log):** the bed is warped. A denser mesh (10×10) plus Z tilt made it printable. (2026-10-12)
+- [x] **Y redesign:** only the motor swap so far. Linear rails, a PEI powder-coated sheet and a magnetic base are on the way. (2026-10-12)
+- [x] **Z tensioner (Sept 29 log):** never installed. (2026-10-12)
 - [x] **`max_velocity: 3000`** was a typo, fixed to 300 on the Pi. (2026-10-12)
 - [x] **Y motor:** swapped to a 17HS8401S (1.7 A rated), so 1.2 A is about 70% and fine. (2026-10-12)
 - [x] **2WD Y:** on paper only, might not happen. See plans. (2026-10-12)
@@ -368,13 +372,15 @@ Nothing open right now.
 
 ## 12. Plans and ideas
 
+- **Y redesign (in progress):** linear rails for Y, plus a PEI powder-coated sheet on a magnetic base. Parts on the way as of 2026-10-12. After it's installed: re-run Y input shaping, re-check the bed mesh, `PROBE_CALIBRATE` for the new sheet, and update this file.
+- **Z tensioner:** looked at one in September, not installed.
 - 2WD Y (maybe, on paper only): `stepper_y1` on D4, two 42-40s at about 0.65 A each, full StealthChop.
 
 ---
 
 ## 13. Change log
 
-Reconstructed from the backup history, so dates are backup times and can lag the real change by a few hours. Newest first. Add new entries at the top.
+From 2026-10-02 on, reconstructed from the backup history, so dates are backup times and can lag the real change by a few hours. Earlier entries come from the engineer's logs (section 16). Newest first. Add new entries at the top.
 
 | Date | Change |
 |---|---|
@@ -392,6 +398,9 @@ Reconstructed from the backup history, so dates are backup times and can lag the
 | 2026-10-04 | `Z_TILT_ADJUST` added to `PRINT_START`, extruder 0.75 to 0.8 A, controller fan tweaks |
 | 2026-10-03 | Y current 0.9 to 1.2 A (probably when the 17HS8401S went in), Y full StealthChop |
 | 2026-10-02 | KAMP added, `M_PURGE` and `SMART_PARK` in `PRINT_START`, Z re-home after soak. First backup |
+| 2026-09-29 | New Z axis part installed |
+| 2026-09-26 | Z tilt set up, EBB42 mounted on the toolhead |
+| 2026-09-23 | Wiring redone (with Wagos) |
 
 ---
 
@@ -411,4 +420,28 @@ Keep a short note of every issue so future you (and any AI) can spot patterns.
 
 | Date | Symptom | Cause | Fix |
 |---|---|---|---|
-| | | | |
+| 2026-09-30 | Weak part cooling | Fan duct | New fan duct |
+| 2026-09-26 | Y motor not powerful enough | Original 42-34 too weak for the bed | Swapped to a 17HS8401S, run at 1.2 A |
+| 2026-09-22 | Couldn't print anything big. Y axis and heated bed were the weak spots | Weak Y motor (see above) and a **warped bed** | Y motor swapped. Mesh raised to 10×10 and Z tilt set up, which made the bed printable |
+
+---
+
+## 16. Engineer's logs
+
+Handwritten logs from before the config backups started, transcribed (spelling tidied up). Year assumed to be 2026. Add new entries at the bottom.
+
+**Sept 22nd**
+Printer worked, ish. Can't print anything too big. Thinking of going directly to the Y axis refactor. This is because most of the other axes are working, but the Y and heatbed aren't. Extruder is great btw!
+
+**Sept 23rd**
+I'm not entirely sure if I will buy the Z axis part, to focus on the Y axis now. Wiring was redone today. It's great! I might need some extra 14 AWG wire. I love Wagos!
+
+**Sept 26th**
+Mimi has been working great! New wiring is flawless, Z tilt is done, EBB is mounted. We're at the Y redesign stage. Around C$180 to buy everything for it. Will do after the first week of Oct.
+**Important:** Y axis motor does need to be replaced. It is not powerful enough!
+
+**Sept 29th**
+New Z axis part is very good! I continue looking for a Z tensioner and I might have found it! I might need some extra hardware (urgent) but I'm not sure yet. Next step is the Y axis, soon to be done too!
+
+**Sept 30th**
+Almost everything goes well BUT part cooling, and I don't know why yet! I might have to change the fan or something.
