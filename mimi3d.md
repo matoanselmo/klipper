@@ -12,7 +12,7 @@
 
 ## 1. Ground rules (read before suggesting changes)
 
-- **Never turn Z off.** The Z gantry drops when unpowered. Don't add `SET_STEPPER_ENABLE STEPPER=stepper_z* ENABLE=0`, and never use `M84.1` inside macros.
+- **Never turn Z off.** Z is belt-driven, so the gantry drops when unpowered. Don't add `SET_STEPPER_ENABLE STEPPER=stepper_z* ENABLE=0`, and never use `M84.1` inside macros.
 - **Don't change speeds, accelerations, kinematics or `rotation_distance`** unless explicitly asked.
 - **Never hand-edit the `SAVE_CONFIG` block** at the bottom of `printer.cfg`. Suggest the calibration command plus `SAVE_CONFIG` instead.
 - **Explain the risk first** for anything that can move hardware: endstops, directions, currents, homing, `z_tilt` or probe positions.
@@ -43,9 +43,10 @@
 | Bed accelerometer | BTT S2DW (RP2040 + LIS2DW), USB |
 | Travel X / Y / Z | -5 to 185 / -50 to 180 / -4 to 150 mm |
 | Nozzle / filament | 0.4 mm / 1.75 mm |
-| Extruder | Bowden, geared 50:17 |
+| Hotend | TZ E3 V2 |
+| Extruder | BMG clone, Bowden, geared 50:17 |
 | Probe | BLTouch clone, offset X -42, Y 0 |
-| Bed max temp | 90 °C |
+| Bed | 200×200 mm usable, Creality textured PC sheet, max 90 °C |
 | Hotend max temp | 300 °C |
 
 ---
@@ -171,11 +172,12 @@ USB serial `/dev/serial/by-id/usb-Klipper_rp2040_5044340418AE361C-if00`. Stuck f
 | Axis | Motor | Current | Microsteps | Driver mode | Homing |
 |---|---|---|---|---|---|
 | X | Creality 42-34 (0.84 A rated) | 0.58 A (0.45 A while homing) | 16 | StealthChop | Sensorless, `driver_SGTHRS: 100`, toward -X |
-| Y | ❓ 42-34, see open questions | 1.2 A | 16 | StealthChop | Physical endstop at -50 |
+| Y | 17HS8401S (42-48, 1.7 A rated) | 1.2 A | 16 | StealthChop | Physical endstop at -50 |
 | Z / Z1 | 42-40 (~1.0 A rated) | 0.70 A run, 0.05 A idle hold | 64, interpolate off | StealthChop | BLTouch virtual endstop |
 | Extruder | 1.1 A motor | 0.65 A | 16, interpolate on | SpreadCycle (for pressure advance) | n/a |
 
-- `rotation_distance: 40` on X, Y and Z.
+- All three axes are belt-driven, `rotation_distance: 40` on X, Y and Z.
+- X, Y and Z currents all sit at about 70% of each motor's rating.
 - Sense resistor on everything: 0.110.
 - Current `[printer]` limits: `max_velocity: 3000`, `max_accel: 3000`, `max_z_velocity: 15`, `max_z_accel: 100`. See open questions about `max_velocity`.
 - Orca sends its own `SET_VELOCITY_LIMIT ACCEL=` during prints.
@@ -202,7 +204,8 @@ Homing Z alone throws `Home X and Y before homing Z` if X/Y aren't homed.
 
 | Setting | Value |
 |---|---|
-| Type | Bowden |
+| Hotend | TZ E3 V2 |
+| Extruder | BMG clone (dual drive), Bowden |
 | `gear_ratio` | 50:17 |
 | `rotation_distance` | 22.678 (calibrated 2026-10-09, was 22.52245) |
 | Pressure advance | 0.35 |
@@ -331,18 +334,21 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 
 Things that look off or are stale. Answer them here once checked.
 
-- [ ] **`max_velocity: 3000`** (changed from 600 on 2026-10-12, same time accel went 6000 to 3000). 3000 mm/s looks like a typo for 300. Intended?
-- [ ] **Y motor:** old notes say 42-34 at 0.9 A (already over its 0.84 A rating) with a plan to swap to a 42-40. It's been at **1.2 A** since 2026-10-03. Was the motor swapped? If it's still the 42-34, 1.2 A is way over spec.
-- [ ] **Y redesign / 2WD Y:** the bed accelerometer arrived with the Y redesign. Is 2WD Y (second motor on D4) still planned?
-- [ ] **Hotend / extruder models:** which hotend and extruder are on Mimi?
-- [ ] **Z drive:** leadscrews or belts? (`rotation_distance: 40` on Z)
-- [ ] **Bed size and surface:** real usable bed dimensions and plate type.
+- [ ] **`max_velocity: 3000` is a typo for 300** (confirmed 2026-10-12). Still needs fixing in `printer.cfg` on the Pi. Untick this once the config says 300.
+- [ ] **X reach vs bed width:** X travel is -5 to 185 (190 mm) on a 200 mm bed. Fine if that's the physical limit, worth a look if parts near the right edge ever get clipped.
+
+**Answered**
+- [x] **Y motor:** swapped to a 17HS8401S (1.7 A rated), so 1.2 A is about 70% and fine. (2026-10-12)
+- [x] **2WD Y:** on paper only, might not happen. See plans. (2026-10-12)
+- [x] **Hotend / extruder:** TZ E3 V2 hotend, BMG clone extruder. (2026-10-12)
+- [x] **Z drive:** belts. (2026-10-12)
+- [x] **Bed:** 200×200 mm usable, Creality textured PC sheet. (2026-10-12)
 
 ---
 
 ## 12. Plans and ideas
 
-- 2WD Y: `stepper_y1` on D4, two 42-40s at about 0.65 A each, full StealthChop.
+- 2WD Y (maybe, on paper only): `stepper_y1` on D4, two 42-40s at about 0.65 A each, full StealthChop.
 
 ---
 
@@ -363,7 +369,7 @@ Reconstructed from the backup history, so dates are backup times and can lag the
 | 2026-10-06 | Homing refactor, Z needs X/Y homed first |
 | 2026-10-05 | X travel -20..170 to -5..185. Mobileraker added |
 | 2026-10-04 | `Z_TILT_ADJUST` added to `PRINT_START`, extruder 0.75 to 0.8 A, controller fan tweaks |
-| 2026-10-03 | Y current 0.9 to 1.2 A, Y full StealthChop |
+| 2026-10-03 | Y current 0.9 to 1.2 A (probably when the 17HS8401S went in), Y full StealthChop |
 | 2026-10-02 | KAMP added, `M_PURGE` and `SMART_PARK` in `PRINT_START`, Z re-home after soak. First backup |
 
 ---
