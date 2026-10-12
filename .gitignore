@@ -5,6 +5,6 @@ secrets.conf
 printer-[0-9]*_[0-9]*.cfg
 *.bak
 *.bkp
-*.csv
+calibration_data_x_20261011_213543.csv
 *.zip
 ShakeTune_results
