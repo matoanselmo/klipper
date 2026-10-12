@@ -93,7 +93,7 @@ When Mimi sits idle, the motors release after 30 s and the heaters switch off a 
 
 Mimi has a custom **smartlapse** service (`smartlapse.conf`) that watches the camera stream and, for every layer, picks the single best frame: the one where the nozzle is farthest from the camera and moving slowest. Those frames feed straight into the Moonraker timelapse plugin, so you get clean timelapses without the usual "park the head every layer" slowdown.
 
-The camera sits on the right end of the Z gantry looking left, and latency is calibrated to -0.08 s. Restart the smartlapse service after editing its config.
+The camera sits on the right end of the Z gantry looking left, and latency is calibrated to -0.08 s. Restart the smartlapse service after editing its config. The source and its systemd unit live in [`smartlapse/`](smartlapse/).
 
 ## 📂 What's in here
 
@@ -106,6 +106,10 @@ printer_data/config/
 ├── crowsnest.conf     # Webcam streaming
 ├── smartlapse.conf    # Best-frame-per-layer timelapse
 └── mobileraker.conf   # Phone notifications
+
+smartlapse/
+├── smartlapse.py      # The smartlapse service
+└── smartlapse.service # systemd unit
 ```
 
 For the deep dive (pin maps, motor currents, calibration history, change log and maintenance notes), see [`mimi3d.md`](mimi3d.md). It doubles as context to paste into an AI chat whenever Mimi needs help.

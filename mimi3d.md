@@ -313,12 +313,12 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 | Crowsnest | ustreamer, `/dev/video0`, 1280×720 @ 30 fps, port 8080, manual exposure (`exposure_time_absolute=100`) |
 | Moonraker | Port 7125 |
 | Timelapse | Output `/srv/timelapses/`, frames `/tmp/timelapse/` |
-| Smartlapse | Custom service `~/smartlapse/smartlapse.py`, log `~/printer_data/logs/smartlapse.log` |
+| Smartlapse | Custom service `~/smartlapse/smartlapse.py` (systemd unit `smartlapse.service`), log `~/printer_data/logs/smartlapse.log`. Source is in this repo under `smartlapse/` |
 | Spoolman | Separate server on the LAN, port 7912 |
 | Mobileraker | Printer name `Mimi3D`, snapshots on |
 | Klipper-Backup | `~/klipper-backup`, pushes this repo every 4 h and on boot |
 
-**Smartlapse** grabs the best frame of every layer (nozzle farthest from the camera, moving slowest) and drops it into the timelapse frame folder. The camera sits on the right end of the Z gantry looking left (`camera_x: 200`). Latency offset -0.08 s (measured 2026-10-11). Restart the service after editing `smartlapse.conf`.
+**Smartlapse** grabs the best frame of every layer (nozzle farthest from the camera, moving slowest) and drops it into the timelapse frame folder. It needs no G-code changes: it streams the camera nonstop and rebuilds the exact toolhead position at each frame's capture time from Klipper's motion history (trapq) over the klippy socket. The camera sits on the right end of the Z gantry looking left (`camera_x: 200`). Latency offset -0.08 s (measured 2026-10-11). Restart the service after editing `smartlapse.conf`.
 
 ### Useful paths
 - Logs: `~/printer_data/logs/klippy.log`, `moonraker.log`, `smartlapse.log`
@@ -352,7 +352,7 @@ Reconstructed from the backup history, so dates are backup times and can lag the
 
 | Date | Change |
 |---|---|
-| 2026-10-12 | README and this file added |
+| 2026-10-12 | README and this file added. Smartlapse source and systemd unit added to the repo |
 | 2026-10-12 | Part fan and hotend fan pins swapped (part fan now `ebb:PA0`), hotend fan capped at 75%, Z removed from controller fan, Z idle hold current 0.35 A to 0.05 A |
 | 2026-10-12 | Smartlapse added. BTT S2DW added on the bed. Input shaper calibrated: X MZV 66.2, Y MZV 45.8. PA 0.7 to 0.35. Limits: velocity 600 to 3000, accel 6000 to 3000 |
 | 2026-10-11 | Extruder: interpolate on, 0.8 A to 0.65 A, SpreadCycle, `min_extrude_temp` 0 to 200 |
