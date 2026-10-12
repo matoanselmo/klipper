@@ -46,7 +46,7 @@
 | Hotend | TZ E3 V2 |
 | Extruder | BMG clone, Bowden, geared 50:17 |
 | Probe | BLTouch clone, offset X -42, Y 0 |
-| Bed | 200×200 mm usable, Creality textured PC sheet, max 90 °C |
+| Bed | 185×180 mm usable, Creality textured PC sheet, max 90 °C |
 | Hotend max temp | 300 °C |
 
 ---
@@ -335,14 +335,13 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 Things that look off or are stale. Answer them here once checked.
 
 - [ ] **`max_velocity: 3000` is a typo for 300** (confirmed 2026-10-12). Still needs fixing in `printer.cfg` on the Pi. Untick this once the config says 300.
-- [ ] **X reach vs bed width:** X travel is -5 to 185 (190 mm) on a 200 mm bed. Fine if that's the physical limit, worth a look if parts near the right edge ever get clipped.
 
 **Answered**
 - [x] **Y motor:** swapped to a 17HS8401S (1.7 A rated), so 1.2 A is about 70% and fine. (2026-10-12)
 - [x] **2WD Y:** on paper only, might not happen. See plans. (2026-10-12)
 - [x] **Hotend / extruder:** TZ E3 V2 hotend, BMG clone extruder. (2026-10-12)
 - [x] **Z drive:** belts. (2026-10-12)
-- [x] **Bed:** 200×200 mm usable, Creality textured PC sheet. (2026-10-12)
+- [x] **Bed:** 185×180 mm usable (matches X max 185, Y max 180), Creality textured PC sheet. (2026-10-12)
 
 ---
 
