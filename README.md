@@ -37,7 +37,7 @@ This repo holds the live configuration for **Mimi3D**. Everything in `printer_da
 
 ## 🔧 Hardware notes
 
-**Motion.** X homes sensorlessly using the TMC2209's StallGuard (with a reduced homing current so it bumps gently), Y uses a physical endstop, and Z homes with the BLTouch. All drivers are TMC2209s running in SpreadCycle.
+**Motion.** X homes sensorlessly using the TMC2209's StallGuard (with a reduced homing current so it bumps gently), Y uses a physical endstop, and Z homes with the BLTouch. All drivers are TMC2209s. X, Y and Z run in StealthChop to keep Mimi quiet, and the extruder runs in SpreadCycle for pressure advance.
 
 **Z gantry hold.** Mimi's Z gantry drops when the motors lose power, so Z never gets switched off. `M84` and `M18` are overridden to release only X, Y and the extruder. When idle, the Z motors drop to a quieter hold current and go back to full power before any move. If you *really* need every motor off, use `M84.1`.
 
@@ -107,6 +107,8 @@ printer_data/config/
 ├── smartlapse.conf    # Best-frame-per-layer timelapse
 └── mobileraker.conf   # Phone notifications
 ```
+
+For the deep dive (pin maps, motor currents, calibration history, change log and maintenance notes), see [`mimi3d.md`](mimi3d.md). It doubles as context to paste into an AI chat whenever Mimi needs help.
 
 ## 🧩 Software stack
 
