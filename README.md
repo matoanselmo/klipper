@@ -237,7 +237,7 @@ Retraction is tuned live with `SET_RETRACTION`, so the file values may lag what'
 | Saved full mesh | Profile `default` (don't overwrite it) |
 | Z tilt | Motors at (260,45) and (-30,45), probes (20,95) and (185,95), 5 retries, 0.03 mm tolerance |
 
-The `default` mesh shows the bed rising about 0.8 mm from front to back.
+The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from front to back, which is why the mesh is a dense 10×10 and runs fresh before every print.
 
 ---
 
@@ -354,12 +354,13 @@ smartlapse/
 
 Things that look off or are stale. Answer them here once checked.
 
-- [ ] **Part cooling:** did the fan pin swap on 2026-10-12 fix the weak cooling from the Sept 30 log?
-- [ ] **Heated bed:** what was wrong with it back in September, and is it sorted?
-- [ ] **Y redesign:** is the C$180 redesign done, or is the motor swap all that happened so far?
-- [ ] **Z tensioner:** did the one from the Sept 29 log get installed?
+Nothing open right now.
 
 **Answered**
+- [x] **Part cooling (Sept 30 log):** fixed by changing the fan duct. The fan pin swap was unrelated. (2026-10-12)
+- [x] **Heated bed (Sept 22 log):** the bed is warped. A denser mesh (10×10) plus Z tilt made it printable. (2026-10-12)
+- [x] **Y redesign:** only the motor swap so far. Linear rails, a PEI powder-coated sheet and a magnetic base are on the way. (2026-10-12)
+- [x] **Z tensioner (Sept 29 log):** never installed. (2026-10-12)
 - [x] **`max_velocity: 3000`** was a typo, fixed to 300 on the Pi. (2026-10-12)
 - [x] **Y motor:** swapped to a 17HS8401S (1.7 A rated), so 1.2 A is about 70% and fine. (2026-10-12)
 - [x] **2WD Y:** on paper only, might not happen. See plans. (2026-10-12)
@@ -371,6 +372,8 @@ Things that look off or are stale. Answer them here once checked.
 
 ## 12. Plans and ideas
 
+- **Y redesign (in progress):** linear rails for Y, plus a PEI powder-coated sheet on a magnetic base. Parts on the way as of 2026-10-12. After it's installed: re-run Y input shaping, re-check the bed mesh, `PROBE_CALIBRATE` for the new sheet, and update this file.
+- **Z tensioner:** looked at one in September, not installed.
 - 2WD Y (maybe, on paper only): `stepper_y1` on D4, two 42-40s at about 0.65 A each, full StealthChop.
 
 ---
@@ -417,9 +420,9 @@ Keep a short note of every issue so future you (and any AI) can spot patterns.
 
 | Date | Symptom | Cause | Fix |
 |---|---|---|---|
-| 2026-09-30 | Weak part cooling, cause unknown at the time | ❓ Possibly the part fan and hotend fan pins being swapped in the config | Pins swapped on 2026-10-12 (part fan now `ebb:PA0`). Confirm it helped |
+| 2026-09-30 | Weak part cooling | Fan duct | New fan duct |
 | 2026-09-26 | Y motor not powerful enough | Original 42-34 too weak for the bed | Swapped to a 17HS8401S, run at 1.2 A |
-| 2026-09-22 | Couldn't print anything big. Y axis and heated bed were the weak spots | Y motor (see above). ❓ Heated bed cause not recorded | Y redesign started. Bed max temp later set to 90 °C (2026-10-10) |
+| 2026-09-22 | Couldn't print anything big. Y axis and heated bed were the weak spots | Weak Y motor (see above) and a **warped bed** | Y motor swapped. Mesh raised to 10×10 and Z tilt set up, which made the bed printable |
 
 ---
 
