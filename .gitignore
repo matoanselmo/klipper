@@ -8,3 +8,4 @@ printer-[0-9]*_[0-9]*.cfg
 calibration_data_x_20261011_213543.csv
 *.zip
 ShakeTune_results
+__pycache__

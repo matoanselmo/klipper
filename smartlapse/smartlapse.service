@@ -1,0 +1,13 @@
+[Unit]
+Description=smartlapse - best-frame-per-layer timelapse
+After=klipper.service crowsnest.service moonraker.service
+
+[Service]
+Type=simple
+User=ruggy
+ExecStart=/usr/bin/python3 /home/ruggy/smartlapse/smartlapse.py -c /home/ruggy/printer_data/config/smartlapse.conf
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
