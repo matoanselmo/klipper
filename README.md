@@ -24,8 +24,8 @@ This repo holds the live configuration for **Mimi3D**. Everything in `printer_da
 | **Interface** | Mainsail, Mobileraker (phone app) |
 | **Kinematics** | Cartesian bed-slinger |
 | **Travel (X / Y / Z)** | -5 → 185 mm / -50 → 180 mm / -4 → 150 mm |
-| **Main MCU** | CAN bus board (`mcu`) |
-| **Toolhead** | BTT EBB over CAN bus (`ebb`) |
+| **Main MCU** | Mellow Fly DP5 over CAN bus (`mcu`) |
+| **Toolhead** | BTT EBB42 over CAN bus (`ebb`) |
 | **Nozzle / filament** | 0.4 mm / 1.75 mm |
 | **Hotend thermistor** | ATC Semitec 104NT, max 300 °C |
 | **Extruder** | Geared 50:17, pressure advance 0.35 |
@@ -42,7 +42,7 @@ This repo holds the live configuration for **Mimi3D**. Everything in `printer_da
 **Z gantry hold.** Mimi's Z gantry drops when the motors lose power, so Z never gets switched off. `M84` and `M18` are overridden to release only X, Y and the extruder. When idle, the Z motors drop to a quieter hold current and go back to full power before any move. If you *really* need every motor off, use `M84.1`.
 
 **Two accelerometers.** Since the bed moves in Y, resonance testing is split across two chips:
-- an **ADXL345** on the EBB toolhead board measures X
+- an **ADXL345** on the EBB42 toolhead board measures X
 - a **BTT S2DW (LIS2DW)** stuck to the bed, connected over USB, measures Y
 
 **Lights.** A dimmable case light (boots at 50%) plus a 25-LED neopixel strip on the drivers that changes effect with the printer's state: idle, heating bed, heating hotend, loading, printing progress and complete.
