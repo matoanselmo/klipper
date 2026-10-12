@@ -19,9 +19,10 @@
 - **`mainsail.cfg` is read-only** (symlink to `~/mainsail-config`). Customise PAUSE / RESUME / CANCEL only through `_CLIENT_VARIABLE` in `macros.cfg`.
 - **Leave `moonraker.conf` alone** unless asked.
 - **Don't restart services yourself.** A restart can kill a running print. The owner restarts with `FIRMWARE_RESTART` / `RESTART` in Mainsail.
-- The bed heater on `PC6` (HEAT0) drives an **external MOSFET** on purpose. Don't flag it.
+- The bed heater on `PC6` drives an **external MOSFET** on purpose. Don't flag it.
 - The probe is a **BLTouch clone (CR-Touch type)**. Don't enable `probe_with_touch_mode` or `stow_on_each_sample: False`.
 - The owner likes **quiet** motors. X, Y and Z run in StealthChop on purpose.
+- **Mind the DP5's shared DIAG pins.** The Y endstop is on PD2 (Z-STOP port, also D2's DIAG) and the runout sensor on PB3 (Y-STOP port, also D1's DIAG). Only X's DIAG jumper is installed.
 - CAN errors (`Lost communication`, `bus_state=off`): **check the CAN cable first** before blaming the config.
 
 **Editing style:** keep the `# ---------------- NAME ----------------` section headers, 4-space indents in macros (no tabs), and the `ebb:` prefix on toolhead pins. After an edit, check `~/printer_data/logs/klippy.log` for `Config error`.
@@ -38,7 +39,7 @@
 | Slicer | OrcaSlicer |
 | Host user | `ruggy` (services: `klipper.service`, `moonraker.service`) |
 | Main board | Mellow Fly DP5 (STM32F072), CAN bridge |
-| Toolhead board | BTT EBB42 (STM32G0B1), CAN @ 1 Mbit |
+| Toolhead board | BTT EBB42 V1.2 (STM32G0B1), CAN @ 1 Mbit |
 | Bed accelerometer | BTT S2DW (RP2040 + LIS2DW), USB |
 | Travel X / Y / Z | -5 to 185 / -50 to 180 / -4 to 150 mm |
 | Nozzle / filament | 0.4 mm / 1.75 mm |
@@ -54,38 +55,106 @@
 ### Mellow Fly DP5 (`mcu`)
 CAN uuid `efd592e09dd8`. Acts as the USB-to-CAN bridge. Temp sensor name: `dp5_mcu`.
 
-| Driver slot | Use | Pins (step / dir / en / uart) |
+Full pinout from Mellow's pin diagram. Driver slots are numbered D0 to D4 from right to left as seen in that diagram (D0 is next to the power input).
+
+**Driver slots**
+
+| Slot | EN | DIR | STEP | UART | DIAG | Mimi uses it for |
+|---|---|---|---|---|---|---|
+| D0 | PC2 | PC14 | PC15 | PC13 | PB4 | X (sensorless, DIAG jumper **on**) |
+| D1 | PA2 | PA0 | PA1 | PC3 | PB3 | Y (DIAG jumper **off**, PB3 is the runout sensor) |
+| D2 | PA6 | PA4 | PA5 | PA3 | PD2 | Z (DIAG jumper **off**, PD2 is the Y endstop) |
+| D3 | PB0 | PC4 | PC5 | PA7 | PB5 | Z1 |
+| D4 | PB11 | PB2 | PB10 | PB1 | NC | **free**, reserved for 2WD Y |
+
+⚠️ Each DIAG pin is shared with an endstop or header pin. A driver's DIAG jumper only goes on when that driver uses sensorless homing, otherwise it fights whatever else is on the pin.
+
+**Power and heaters**
+
+| Terminal | Pin | Mimi uses it for |
 |---|---|---|
-| D0 | X | PC15 / PC14 / PC2 / PC13, diag PB4 |
-| D1 | Y | PA1 / PA0 / PA2 / PC3 |
-| D2 | Z | PA5 / PA4 / PA6 / PA3 |
-| D3 | Z1 | PC5 / PC4 / PB0 / PA7 |
-| D4 | **free**, reserved for 2WD Y | PB10 / PB2 / PB11 / PB1 |
+| POWER | n/a | PSU input |
+| PC6 | PC6 | Bed heater, drives an external MOSFET |
+| PC7 | PC7 | free |
 
-Other DP5 pins:
+**Thermistors**
 
-| Pin | Use |
-|---|---|
-| PC6 | Bed heater (HEAT0, drives an external MOSFET) |
-| PC0 | Bed thermistor (Generic 3950) |
-| PD2 | Y endstop (`^!PD2`) |
-| PB3 | Filament runout switch |
-| PC8 | Case light (PWM, FAN0 header) |
-| PC9 | Controller fan |
-| PB7 | Neopixel strip `drivers` (25 LEDs, GRB) |
+| Label | Pin | Mimi uses it for |
+|---|---|---|
+| BED-Temp | PC0 | Bed thermistor (Generic 3950) |
+| E-Temp | PC1 | free (a dryer air sensor lived here briefly in Oct 2026) |
 
-### BTT EBB42 (`ebb`)
-CAN uuid `69f9e88e88cc`. Mounted upright on the back of the toolhead, USB-C up. Temp sensor name: `ebb_mcu`.
+**Fans**
 
-| Pin | Use |
-|---|---|
-| PD0 / PD1 / PD2, UART PA15 | Extruder stepper |
-| PB13 | Hotend heater |
-| PA3 | Hotend thermistor (ATC Semitec 104NT-4-R025H42G) |
-| PA0 | Part cooling fan |
-| PA1 | Hotend fan |
-| PB8 / PB9 | BLTouch sensor / control |
-| PB12, PB10, PB11, PB2 | ADXL345 (software SPI: cs, sclk, mosi, miso) |
+| Label | Pin | Mimi uses it for |
+|---|---|---|
+| FAN0 | PC8 | Case light (PWM) |
+| FAN1 | PC9 | Controller fan |
+| VCC | n/a | Always-on power header |
+
+**Endstops** (each is signal / GND / 5V)
+
+| Label | Pin | Mimi uses it for |
+|---|---|---|
+| X-STOP | PB4 | nothing plugged in (X is sensorless, PB4 is X's DIAG) |
+| Y-STOP | PB3 | Filament runout switch (`^PB3`) |
+| Z-STOP | PD2 | **Y endstop** (`^!PD2`) |
+
+**Expansion headers**
+
+| Header | Row 1 | Row 2 |
+|---|---|---|
+| EXP1 | PA15, PA14, PA13, NC, 5V | NC, PC11, PC10, NC, GND |
+| EXP2 | PB13, PB12, PB15, RST, NC | PB14, PC12, PB6, **PB7**, GND |
+
+PB7 on EXP2 drives the neopixel strip `drivers` (25 LEDs, GRB).
+
+**Other headers**
+
+| Header | Pins | Notes |
+|---|---|---|
+| CAN | 5V, GND, CAN-L, CAN-H | 120R termination jumper next to it |
+| Probe / servo style | PB5, GND, PA8, 5V, GND | PB5 is shared with D3's DIAG |
+| UART | PA10, PA9, GND, 5V | |
+| USB-C | | Host connection (USB-to-CAN bridge) |
+
+### BTT EBB42 V1.2 (`ebb`)
+CAN uuid `69f9e88e88cc`, CAN at 1 Mbit. Mounted upright on the back of the toolhead, USB-C up. Temp sensor name: `ebb_mcu`. It's a V1.2 because the heater is on PB13 (V1.1 boards use PA2).
+
+**Onboard parts**
+
+| Part | Pins | Mimi uses it for |
+|---|---|---|
+| TMC2209 | EN PD2, STEP PD0, DIR PD1, UART PA15 | Extruder |
+| ADXL345 (SPI2) | CS PB12, SCLK PB10, MISO PB2, MOSI PB11 | X resonance (software SPI in config) |
+| MAX31865 (SPI1) | CS PA4, SCLK PA5, MISO PA6, MOSI PA7 | not used (for PT100 / PT1000) |
+| CAN | TX PB1, RX PB0 | Link to the DP5 |
+| USB | DP PA12, DM PA11 | Flashing only |
+
+**Connectors**
+
+| Connector | Pins | Mimi uses it for |
+|---|---|---|
+| Hotend 0 | Heater PB13 (V1.2) / PA2 (V1.1), VIN | Hotend heater (`ebb:PB13`) |
+| TH0 | PA3, GND | Hotend thermistor (Semitec 104NT) |
+| PT100 / PT1000 | via MAX31865 | not used |
+| FAN1 | PA0, VIN | Part cooling fan |
+| FAN2 | PA1, VIN | Hotend fan |
+| Probe | GND, 5V, PB9, GND, PB8 | BLTouch: control PB9, sensor PB8 |
+| Endstop | PB7, PB5, PB6, GND, 5V | free |
+| I2C | 5V, GND, PB3, PB4 | free |
+| RGB | 5V, PD3, GND | free |
+| E-Motor | | Extruder motor |
+| CAN / power | GND, VIN, CAN-L, CAN-H | Cable to the DP5 |
+
+**PT100 / PT1000 DIP switches** (only matter if the MAX31865 is used)
+
+| Sensor | SW1 | SW2 | SW3 | SW4 |
+|---|---|---|---|---|
+| 2-wire PT100 | ON | ON | ON | OFF |
+| 2-wire PT1000 | ON | ON | OFF | OFF |
+| 4-wire PT100 | OFF | OFF | ON | OFF |
+| 4-wire PT1000 | OFF | OFF | OFF | OFF |
 
 ### BTT S2DW (`btt_lis2dw`)
 USB serial `/dev/serial/by-id/usb-Klipper_rp2040_5044340418AE361C-if00`. Stuck flat on the bed, measures Y resonance. Pins gpio9 / 10 / 11 / 8 (cs, sclk, mosi, miso). `axes_map: -y, x, z` (measured 2026-10-11).
