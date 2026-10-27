@@ -1,0 +1,512 @@
+[homing_override]
+axes: xyz
+gcode:
+    _Z_CURRENT_RUN
+    {% set home_cur = 0.45 %}
+    {% set run_cur = printer.configfile.settings['tmc2209 stepper_x'].run_current %}
+    {% set home_cur_y = 0.8 %}
+    {% set run_cur_y = printer.configfile.settings['tmc2209 stepper_y'].run_current %}
+    {% set homed = printer.toolhead.homed_axes %}
+    {% set home_all = 'X' not in params and 'Y' not in params and 'Z' not in params %}
+    {% set do_x = home_all or 'X' in params %}
+    {% set do_y = home_all or 'Y' in params %}
+    {% set do_z = home_all or 'Z' in params %}
+    {% set x_ok = do_x or 'x' in homed %}
+    {% set y_ok = do_y or 'y' in homed %}
+
+    {% if do_z and not (x_ok and y_ok) %}
+        { action_raise_error("Home X and Y before homing Z") }
+    {% endif %}
+
+    # Z hop (only fake the position if Z isn't homed yet)
+    {% if 'z' not in homed %}
+        SET_KINEMATIC_POSITION Z=0 SET_HOMED=z
+        G91
+        G1 Z10 F900
+        G90
+        SET_KINEMATIC_POSITION SET_HOMED=none CLEAR_HOMED=z
+    {% elif printer.toolhead.position.z < 10 %}
+        G90
+        G1 Z10 F900
+    {% endif %}
+
+    {% if do_x %}
+        SET_TMC_CURRENT STEPPER=stepper_x CURRENT={home_cur}
+        G28 X
+        G90
+        G1 X10 F6000
+        SET_TMC_CURRENT STEPPER=stepper_x CURRENT={run_cur}
+    {% endif %}
+
+    {% if do_y %}
+        SET_TMC_CURRENT STEPPER=stepper_y CURRENT={home_cur_y}
+        G28 Y
+        G90
+        G1 Y10 F6000
+        SET_TMC_CURRENT STEPPER=stepper_y CURRENT={run_cur_y}
+    {% endif %}
+
+    {% if do_z %}
+        G90
+        G1 X120 Y95 F12000
+        G28 Z
+        G1 Z10 F900
+    {% endif %}
+
+    {% if x_ok and y_ok %}
+        G90
+        G1 X78 Y95 F12000
+    {% endif %}
+
+
+[gcode_macro PRINT_START]
+gcode:
+    {% set bed_temp = params.BED_TEMP|default(60)|float %}
+    {% set extruder_temp = params.EXTRUDER_TEMP|default(210)|float %}
+    {% set soak_time = params.SOAK|default(120)|int %}
+
+    SET_LED_EFFECT EFFECT=drivers_loading REPLACE=1
+
+    G90
+
+    {% if "xyz" not in printer.toolhead.homed_axes %}
+    	G28
+  	{% endif %}
+
+    PREVIEW_PRINT_AREA
+
+    # Change LED effect to heating
+    SET_LED_EFFECT EFFECT=drivers_heating_bed REPLACE=1
+
+    # Start heating bed toward target, don't block yet
+    M140 S{bed_temp}
+
+    # Warm the hotend partway during the soak (safe for probing, avoids oozing)
+    M104 S150
+
+    # Move to a safe waiting position while heating
+    Smart_Park
+
+    # Wait for bed to actually reach target temp
+    M190 S{bed_temp}
+
+    # Soak so the bed actually equalizes, not just hits target at the sensor
+    G4 P{soak_time * 1000}
+
+    SET_LED_EFFECT EFFECT=drivers_loading REPLACE=1
+
+    # Re-home Z now that the bed and frame have expanded
+    G28 Z
+
+    Z_TILT_ADJUST
+
+    # Fresh adaptive mesh every print, only under the objects.
+    # Separate profile so SAVE_CONFIG never overwrites the full "default" mesh.
+    BED_MESH_CLEAR
+    BED_MESH_CALIBRATE ADAPTIVE=1 ADAPTIVE_MARGIN=5 PROFILE=adaptive
+
+    # Park near the print area so any ooze during final heating stays off the parts
+    Smart_Park
+
+    SET_LED_EFFECT EFFECT=drivers_heating_extruder REPLACE=1
+
+    # Now bring hotend to full temp and wait
+    M109 S{extruder_temp}
+
+    SET_LED_EFFECT EFFECT=drivers_progress REPLACE=1
+
+    # Purge (M_PURGE places itself in front of the objects automatically)
+    G1 Z2.0 F3000
+    M_PURGE
+
+[gcode_macro PRINT_END]
+gcode:
+    # Relative extrusion and positioning for the retract below
+    M83
+    G91
+
+    # Retract a bit to avoid oozing/stringing on the finished part
+    G1 E-2 F1800
+
+    # Raise Z relative to current position, capped at max travel
+    {% set z_max = printer.toolhead.axis_maximum.z %}
+    {% set current_z = printer.toolhead.position.z %}
+    {% set z_lift = [current_z + 10, z_max]|min %}
+
+    G90
+    G1 Z{z_lift} F600
+
+    # Move to back of bed for easy part removal
+    G1 X100 Y150 F6000
+
+    # Turn off heaters
+    M104 S0
+    M140 S0
+
+    # Turn off part cooling fan
+    M106 S0
+
+    # Release X, Y and extruder (M84 is Z-safe, see Z HOLD below)
+    M84
+
+    # Clear any exclude_object state from this print
+    EXCLUDE_OBJECT_RESET
+
+    {action_respond_info("Print complete")}
+
+    SET_LED_EFFECT EFFECT=drivers_complete REPLACE=1
+    UPDATE_DELAYED_GCODE ID=return_to_idle DURATION=30
+
+# ---------------- MAINSAIL PAUSE / CANCEL ----------------
+# Overrides the defaults in mainsail.cfg (read-only). Park spot and lift
+# match PRINT_END; retraction uses [firmware_retraction] (G10/G11).
+[gcode_macro _CLIENT_VARIABLE]
+variable_use_custom_pos   : True
+variable_custom_park_x    : 100.0
+variable_custom_park_y    : 150.0
+variable_custom_park_dz   : 10.0
+variable_park_at_cancel   : True
+variable_use_fw_retract   : True
+variable_user_cancel_macro: "_ON_CANCEL"
+gcode:
+
+# Runs inside Mainsail's CANCEL_PRINT (after park, retract and heaters off)
+[gcode_macro _ON_CANCEL]
+gcode:
+    M84
+    SET_LED_EFFECT EFFECT=drivers_idle REPLACE=1
+
+[gcode_macro PREVIEW_PRINT_AREA]
+description: Traces the bounding box of all labeled objects
+gcode:
+    {% set z_hop = params.Z_HOP|default(10)|float %}
+    {% set speed = params.SPEED|default(6000)|int %}
+    {% set margin = params.MARGIN|default(0)|float %}
+
+    {% set objs = printer.exclude_object.objects %}
+
+    {% if objs|length == 0 %}
+        {action_respond_info("No labeled objects found, enable 'label objects' in your slicer")}
+    {% else %}
+        # Walk every object's polygon and track the extremes
+        {% set ns = namespace(x_min=9999, x_max=-9999, y_min=9999, y_max=-9999) %}
+        {% for obj in objs %}
+            {% for point in obj.polygon %}
+                {% set ns.x_min = [ns.x_min, point[0]]|min %}
+                {% set ns.x_max = [ns.x_max, point[0]]|max %}
+                {% set ns.y_min = [ns.y_min, point[1]]|min %}
+                {% set ns.y_max = [ns.y_max, point[1]]|max %}
+            {% endfor %}
+        {% endfor %}
+
+        # Apply margin and clamp to machine limits
+        {% set ax_min = printer.toolhead.axis_minimum %}
+        {% set ax_max = printer.toolhead.axis_maximum %}
+        {% set x1 = [ns.x_min - margin, ax_min.x]|max %}
+        {% set x2 = [ns.x_max + margin, ax_max.x]|min %}
+        {% set y1 = [ns.y_min - margin, ax_min.y]|max %}
+        {% set y2 = [ns.y_max + margin, ax_max.y]|min %}
+
+        SAVE_GCODE_STATE NAME=preview_state
+        G90
+        G1 Z{z_hop} F600
+        G1 X{x1} Y{y1} F{speed}
+        G1 X{x2} Y{y1} F{speed}
+        G1 X{x2} Y{y2} F{speed}
+        G1 X{x1} Y{y2} F{speed}
+        G1 X{x1} Y{y1} F{speed}
+        RESTORE_GCODE_STATE NAME=preview_state
+    {% endif %}
+
+[gcode_macro M_PURGE]
+description: Purges filament in a compact 8x8mm M shape just in front of the print area
+gcode:
+    # 1. Geometry and extrusion settings
+    {% set width = 8.0 %}       ; Total width of the M
+    {% set height = 8.0 %}      ; Total height of the M
+    {% set gap = 4.0 %}         ; Clearance between the M and the objects
+    {% set z_height = 0.28 %}   ; First layer purge height
+    {% set feed_rate = 600 %}   ; 10mm/s, ~6mm3/s so the hotend can keep up
+    {% set purge_mult = 0.7 %}  ; Keep under Klipper's default max_extrude_cross_section
+    {% set prime_len = 10.0 %}   ; Refills the nozzle after the last retract (Bowden lag)
+
+    {% set ax_min = printer.toolhead.axis_minimum %}
+    {% set ax_max = printer.toolhead.axis_maximum %}
+    {% set objs = printer.exclude_object.objects %}
+
+    # 2. Pick a start point
+    #    Manual PURGE_X/PURGE_Y wins, then in front of the objects,
+    #    then to the left of them, then a fixed fallback.
+    {% if 'PURGE_X' in params and 'PURGE_Y' in params %}
+        {% set x0 = params.PURGE_X|float %}
+        {% set y0 = params.PURGE_Y|float %}
+    {% elif objs|length > 0 %}
+        {% set ns = namespace(x_min=9999, y_min=9999) %}
+        {% for obj in objs %}
+            {% for point in obj.polygon %}
+                {% set ns.x_min = [ns.x_min, point[0]]|min %}
+                {% set ns.y_min = [ns.y_min, point[1]]|min %}
+            {% endfor %}
+        {% endfor %}
+
+        {% if ns.y_min - height - gap >= ax_min.y + 1 %}
+            # Room in front of the objects
+            {% set x0 = [ns.x_min, ax_min.x + 1]|max %}
+            {% set y0 = ns.y_min - height - gap %}
+        {% elif ns.x_min - width - gap - 4 >= ax_min.x + 1 %}
+            # No room in front, go to the left instead (extra 4mm for the wipe)
+            {% set x0 = ns.x_min - width - gap - 4 %}
+            {% set y0 = [ns.y_min, ax_min.y + 1]|max %}
+        {% else %}
+            # Objects hug the front-left corner, use the front edge
+            {% set x0 = [ns.x_min, ax_min.x + 1]|max %}
+            {% set y0 = ax_min.y + 1 %}
+        {% endif %}
+    {% else %}
+        {% set x0 = 110.0 %}
+        {% set y0 = 10.0 %}
+    {% endif %}
+
+    # Keep the M and its wipe inside the bed
+    {% set x0 = [x0, ax_max.x - width - 5]|min %}
+    {% set y0 = [y0, ax_max.y - height - 1]|min %}
+
+    # 3. Calculate path coordinates relative to start point
+    {% set x2 = x0 + (width * 0.5) %}
+    {% set x4 = x0 + width %}
+    {% set y_top = y0 + height %}
+    {% set y_mid = y0 + (height * 0.4) %} ; Middle point of the M
+
+    # 4. Execute the "M" sequence
+    G90                             ; Absolute positioning
+    M83                             ; Relative extrusion (E values below are per segment)
+    G92 E0                          ; Reset extruder
+    G1 X{x0} Y{y0} F6000            ; Move to start point (bottom left)
+    G1 Z{z_height} F1500            ; Drop to purge layer height
+    G11
+    G1 E{prime_len} F300            ; Prime so the first leg isn't starved
+
+    G1 X{x0} Y{y_top} E{height * 0.35 * purge_mult} F{feed_rate}     ; Left leg up
+    G1 X{x2} Y{y_mid} E{height * 0.3 * purge_mult} F{feed_rate}      ; Left diagonal down
+    G1 X{x4} Y{y_top} E{height * 0.3 * purge_mult} F{feed_rate}      ; Right diagonal up
+    G1 X{x4} Y{y0} E{height * 0.35 * purge_mult} F{feed_rate}        ; Right leg down
+
+    # 5. Clean retraction and wipe
+    G1 E-0.8 F3000                  ; Light retraction to prevent stringing
+    G1 X{x4 + 4} Y{y0 + 2} F6000    ; Diagonal wipe away from the M to snap the filament line
+    G92 E0                          ; Reset extruder
+
+[gcode_macro SMART_PARK]
+description: Parks the printhead just in front of/left of the print area (replaces KAMP's Smart_Park)
+gcode:
+    {% set z_height = 10.0 %}   ; Park height
+    {% set margin = 10.0 %}     ; Distance from the objects' min corner
+
+    {% set ax_min = printer.toolhead.axis_minimum %}
+    {% set ax_max = printer.toolhead.axis_maximum %}
+    {% set points = printer.exclude_object.objects | map(attribute='polygon') | sum(start=[]) %}
+
+    {% if points|length > 0 %}
+        {% set x = [(points | map(attribute=0) | min) - margin, ax_min.x]|max %}
+        {% set y = [(points | map(attribute=1) | min) - margin, ax_min.y]|max %}
+    {% else %}
+        # No labeled objects: park at the bed centre
+        {% set x = ax_max.x / 2 %}
+        {% set y = ax_max.y / 2 %}
+    {% endif %}
+
+    SAVE_GCODE_STATE NAME=smart_park_state
+    G90
+    {% if printer.toolhead.position.z < z_height %}
+        G1 Z{z_height} F900
+    {% endif %}
+    G1 X{x} Y{y} F{printer.toolhead.max_velocity * 60}
+    G1 Z{z_height} F900
+    RESTORE_GCODE_STATE NAME=smart_park_state
+
+# Scheduled by [idle_timeout]. Skipped if anything happened since (state
+# leaves "Idle"); the next idle timeout reschedules it.
+[delayed_gcode heaters_off_when_idle]
+gcode:
+    {% if printer.idle_timeout.state == "Idle" and not printer.pause_resume.is_paused %}
+        TURN_OFF_HEATERS
+    {% endif %}
+
+[delayed_gcode return_to_idle]
+gcode:
+    SET_LED_EFFECT EFFECT=drivers_idle REPLACE=1
+
+# ---------------- Z HOLD ----------------
+# The Z gantry drops when unpowered, so Z is never turned off:
+# both Z motors are energised at boot, and M84/M18 (also used by
+# idle_timeout, Mainsail's motors-off button and PRINT_END) only
+# release X, Y and the extruder. M84.1 is the real all-motors-off.
+
+# While idle both Z motors drop to a lower hold current (quieter, still
+# level); homing_override restores full current before any move.
+[gcode_macro _Z_HOLD]
+variable_idle_current: 0.70   ; A, belted Z carries the gantry weight: keep at run current
+gcode:
+
+[gcode_macro _Z_CURRENT_IDLE]
+gcode:
+    {% set cur = printer["gcode_macro _Z_HOLD"].idle_current %}
+    SET_TMC_CURRENT STEPPER=stepper_z CURRENT={cur}
+    SET_TMC_CURRENT STEPPER=stepper_z1 CURRENT={cur}
+
+[gcode_macro _Z_CURRENT_RUN]
+gcode:
+    SET_TMC_CURRENT STEPPER=stepper_z CURRENT={printer.configfile.settings['tmc2209 stepper_z'].run_current}
+    SET_TMC_CURRENT STEPPER=stepper_z1 CURRENT={printer.configfile.settings['tmc2209 stepper_z1'].run_current}
+
+[delayed_gcode hold_z_at_boot]
+initial_duration: 1
+gcode:
+    SET_STEPPER_ENABLE STEPPER=stepper_z ENABLE=1
+    SET_STEPPER_ENABLE STEPPER=stepper_z1 ENABLE=1
+    _Z_CURRENT_IDLE
+
+[gcode_macro M84]
+description: Motors off except Z (Z stays held so the gantry can't drop)
+rename_existing: M84.1
+gcode:
+    SET_STEPPER_ENABLE STEPPER=stepper_x ENABLE=0
+    SET_STEPPER_ENABLE STEPPER=stepper_y ENABLE=0
+    SET_STEPPER_ENABLE STEPPER=extruder ENABLE=0
+    # X/Y may be moved by hand now: forget their homing, keep Z's
+    SET_KINEMATIC_POSITION SET_HOMED=none CLEAR_HOMED=xy
+    _Z_CURRENT_IDLE
+
+[gcode_macro M18]
+description: Same as M84 (Z stays held)
+rename_existing: M18.1
+gcode:
+    M84
+
+# ---------------- TUNING ----------------
+[gcode_macro TEST_SPEED]
+# Home, get position, throw around toolhead, home again.
+# If MCU stepper positions (first line in GET_POSITION) are greater than a full step different (your number of microsteps), then skipping occured.
+# We only measure to a full step to accomodate for endstop variance.
+# Example: TEST_SPEED SPEED=300 ACCEL=5000 ITERATIONS=10
+
+description: Test for max speed and acceleration parameters for the printer. Procedure: Home -> ReadPositionFromMCU -> MovesToolhead@Vel&Accel -> Home -> ReadPositionfromMCU
+
+gcode:
+    # Speed
+    {% set speed  = params.SPEED|default(printer.configfile.settings.printer.max_velocity)|int %}
+    # Iterations
+    {% set iterations = params.ITERATIONS|default(5)|int %}
+    # Acceleration
+    {% set accel  = params.ACCEL|default(printer.configfile.settings.printer.max_accel)|int %}
+    # Minimum Cruise Ratio
+    {% set min_cruise_ratio = params.MIN_CRUISE_RATIO|default(0.5)|float %}
+    # Bounding inset for large pattern (helps prevent slamming the toolhead into the sides after small skips, and helps to account for machines with imperfectly set dimensions)
+    {% set bound = params.BOUND|default(20)|int %}
+    # Size for small pattern box
+    {% set smallpatternsize = params.SMALLPATTERNSIZE|default(20)|int %}
+
+    # Large pattern
+        # Max positions, inset by BOUND
+        {% set x_min = printer.toolhead.axis_minimum.x %}
+        {% if x_min < 0 %}
+            {% set x_min = 0 %}
+        {% endif %}
+
+        {% set y_min = printer.toolhead.axis_minimum.y %}
+        {% if y_min < 0 %}
+            {% set y_min = 0 %}
+        {% endif %}
+
+        {% set x_min = x_min + bound %}
+        {% set x_max = printer.toolhead.axis_maximum.x - bound %}
+        {% set y_min = y_min + bound %}
+        {% set y_max = printer.toolhead.axis_maximum.y - bound %}
+
+    # Small pattern at center
+        # Find X/Y center point
+        {% set x_center = (printer.toolhead.axis_minimum.x|float + printer.toolhead.axis_maximum.x|float ) / 2 %}
+        {% set y_center = (printer.toolhead.axis_minimum.y|float + printer.toolhead.axis_maximum.y|float ) / 2 %}
+
+        # Set small pattern box around center point
+        {% set x_center_min = x_center - (smallpatternsize/2) %}
+        {% set x_center_max = x_center + (smallpatternsize/2) %}
+        {% set y_center_min = y_center - (smallpatternsize/2) %}
+        {% set y_center_max = y_center + (smallpatternsize/2) %}
+
+    # Save current gcode state (absolute/relative, etc)
+    SAVE_GCODE_STATE NAME=TEST_SPEED
+
+    # Output parameters to g-code terminal
+    { action_respond_info("TEST_SPEED: starting %d iterations at speed %d, accel %d" % (iterations, speed, accel)) }
+
+    # Home and get position for comparison later:
+        M400 # Finish moves - https://github.com/AndrewEllis93/Print-Tuning-Guide/issues/66
+        G28
+        # Move 50mm away from max position and home again (to help with hall effect endstop accuracy - https://github.com/AndrewEllis93/Print-Tuning-Guide/issues/24)
+        G90
+        G1 X{printer.toolhead.axis_maximum.x-50} Y{printer.toolhead.axis_maximum.y-50} F{30*60}
+        M400 # Finish moves - https://github.com/AndrewEllis93/Print-Tuning-Guide/issues/66
+        G28 X Y
+        G0 X{printer.toolhead.axis_maximum.x-1} Y{printer.toolhead.axis_maximum.y-1} F{30*60}
+        G4 P1000
+        GET_POSITION
+
+    # Go to starting position
+    G0 X{x_min} Y{y_min} Z{bound + 10} F{speed*60}
+
+    # Set new limits
+    {% if printer.configfile.settings.printer.minimum_cruise_ratio is defined %}
+        SET_VELOCITY_LIMIT VELOCITY={speed} ACCEL={accel} MINIMUM_CRUISE_RATIO={min_cruise_ratio}
+    {% else %}
+        SET_VELOCITY_LIMIT VELOCITY={speed} ACCEL={accel} ACCEL_TO_DECEL={accel / 2}
+    {% endif %}
+
+    {% for i in range(iterations) %}
+        # Large pattern diagonals
+        G0 X{x_min} Y{y_min} F{speed*60}
+        G0 X{x_max} Y{y_max} F{speed*60}
+        G0 X{x_min} Y{y_min} F{speed*60}
+        G0 X{x_max} Y{y_min} F{speed*60}
+        G0 X{x_min} Y{y_max} F{speed*60}
+        G0 X{x_max} Y{y_min} F{speed*60}
+
+        # Large pattern box
+        G0 X{x_min} Y{y_min} F{speed*60}
+        G0 X{x_min} Y{y_max} F{speed*60}
+        G0 X{x_max} Y{y_max} F{speed*60}
+        G0 X{x_max} Y{y_min} F{speed*60}
+
+        # Small pattern diagonals
+        G0 X{x_center_min} Y{y_center_min} F{speed*60}
+        G0 X{x_center_max} Y{y_center_max} F{speed*60}
+        G0 X{x_center_min} Y{y_center_min} F{speed*60}
+        G0 X{x_center_max} Y{y_center_min} F{speed*60}
+        G0 X{x_center_min} Y{y_center_max} F{speed*60}
+        G0 X{x_center_max} Y{y_center_min} F{speed*60}
+
+        # Small pattern box
+        G0 X{x_center_min} Y{y_center_min} F{speed*60}
+        G0 X{x_center_min} Y{y_center_max} F{speed*60}
+        G0 X{x_center_max} Y{y_center_max} F{speed*60}
+        G0 X{x_center_max} Y{y_center_min} F{speed*60}
+    {% endfor %}
+
+    # Restore max speed/accel/accel_to_decel to their configured values
+    {% if printer.configfile.settings.printer.minimum_cruise_ratio is defined %}
+        SET_VELOCITY_LIMIT VELOCITY={printer.configfile.settings.printer.max_velocity} ACCEL={printer.configfile.settings.printer.max_accel} MINIMUM_CRUISE_RATIO={printer.configfile.settings.printer.minimum_cruise_ratio}
+    {% else %}
+        SET_VELOCITY_LIMIT VELOCITY={printer.configfile.settings.printer.max_velocity} ACCEL={printer.configfile.settings.printer.max_accel} ACCEL_TO_DECEL={printer.configfile.settings.printer.max_accel_to_decel}
+    {% endif %}
+
+    # Re-home and get position again for comparison:
+        M400 # Finish moves - https://github.com/AndrewEllis93/Print-Tuning-Guide/issues/66
+        G28 # This is a full G28 to fix an issue with CoreXZ - https://github.com/AndrewEllis93/Print-Tuning-Guide/issues/12
+        # Go to XY home positions (in case your homing override leaves it elsewhere)
+        G90
+        G0 X{printer.toolhead.axis_maximum.x-1} Y{printer.toolhead.axis_maximum.y-1} F{30*60}
+        G4 P1000
+        GET_POSITION
+
+    # Restore previous gcode state (absolute/relative, etc)
+    RESTORE_GCODE_STATE NAME=TEST_SPEED
