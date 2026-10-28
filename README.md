@@ -18,7 +18,7 @@ Printer notes, logbook and AI context for **Mimi3D**, a custom Klipper bed-sling
 - **Don't change speeds, accelerations, kinematics or `rotation_distance`** unless explicitly asked.
 - **Never hand-edit the `SAVE_CONFIG` block** at the bottom of `printer.cfg`. Suggest the calibration command plus `SAVE_CONFIG` instead.
 - **Explain the risk first** for anything that can move hardware: endstops, directions, currents, homing, `z_tilt` or probe positions.
-- **`mainsail.cfg` is read-only** (symlink to `~/mainsail-config`). Customise PAUSE / RESUME / CANCEL only through `_CLIENT_VARIABLE` in `macros.cfg`.
+- **`mainsail.cfg` is read-only** (symlink to `~/mainsail-config`). Customise PAUSE / RESUME / CANCEL only through `_CLIENT_VARIABLE` in `macros/_settings.cfg`.
 - **Leave `moonraker.conf` alone** unless asked.
 - **Don't restart services yourself.** A restart can kill a running print. The owner restarts with `FIRMWARE_RESTART` / `RESTART` in Mainsail.
 - The bed heater on `PC6` drives an **external MOSFET** on purpose. Don't flag it.
@@ -186,20 +186,20 @@ USB serial `/dev/serial/by-id/usb-Klipper_rp2040_5044340418AE361C-if00`. Stuck f
 - Current `[printer]` limits: `max_velocity: 300`, `max_accel: 3000`, `max_z_velocity: 15`, `max_z_accel: 100`.
 - Orca sends its own `SET_VELOCITY_LIMIT ACCEL=` during prints.
 
-### Homing (`[homing_override]` in `macros.cfg`)
-1. Switches Z to run current, hops Z up 10 mm (fakes Z position if Z isn't homed yet)
-2. X: drops to 0.45 A, homes sensorlessly, backs off to X10, restores current
-3. Y: homes on the physical endstop
-4. Z: moves to X120 Y95, probes, lifts to Z10
-5. Parks at X78 Y95
+### Homing (`[homing_override]` in `macros/homing.cfg`)
+All numbers below are in `_CFG` (`macros/_settings.cfg`).
+1. Switches Z to run current, hops Z up 10 mm (`_HOMING_Z_HOP`, fakes Z position if Z isn't homed yet)
+2. X, then Y, via `_HOME_SENSORLESS`: drop to homing current (X 0.45 A, Y 0.80 A), ram the frame, back off to 10 mm, wait 0.5 s, ram again (`home_passes: 2`, like the Prusa Core One; the last ram sets the position), then return to the intended run/idle level recorded by `_SET_CURRENT`
+3. Z: moves to X120 Y95, probes, lifts to Z10
+4. Parks at X78 Y95
 
 Homing Z alone throws `Home X and Y before homing Z` if X/Y aren't homed.
 
 ### Z hold
-- `hold_z_at_boot` energises both Z motors 1 s after startup at idle current.
+- `_HOLD_Z_AT_BOOT` (`macros/motors.cfg`) energises both Z motors 1 s after startup and sets X and Z to idle current.
 - `M84` / `M18` are overridden: they release X, Y and E only, clear X/Y homing, and drop Z to idle current. `[idle_timeout]`, `PRINT_END`, Mainsail's motors-off button and cancel all go through this.
 - `M84.1` is the real all-motors-off. Maintenance only.
-- Idle hold current is `variable_idle_current` in `_Z_HOLD` (0.05 A). Raise it if the gantry creeps down.
+- Currents go through `_SET_CURRENT STEPPERS=<list> LEVEL=run|idle`: run comes from `hardware/`, idle from `_CFG.idle_current` (X 0.35 A, Z 0.40 A). Raise Z if the gantry creeps down. X is at run current only during prints.
 - The controller fan watches X, Y and E only, since Z is always on.
 
 ---
@@ -263,7 +263,7 @@ Calibrated 2026-10-12 with two chips: ADXL345 on the EBB42 for X, LIS2DW on the 
 - **Runout sensor** (`PB3`): pauses the print, 3 s event delay.
 - **Temperature sensors:** `dp5_mcu`, `ebb_mcu`.
 
-### LED effects (`leds.cfg`, all named `drivers_*`)
+### LED effects (`hardware/leds.cfg`, all named `drivers_<state>`)
 
 | Effect | Look | When |
 |---|---|---|
@@ -271,17 +271,17 @@ Calibrated 2026-10-12 with two chips: ADXL345 on the EBB42 for X, LIS2DW on the 
 | `drivers_loading` | Breathing purple | Homing, probing, meshing |
 | `drivers_heating_bed` | Red to yellow by bed temp | Bed heating |
 | `drivers_heating_extruder` | Red to yellow by hotend temp | Hotend heating |
-| `drivers_progress` | Blue progress bar | Printing |
+| `drivers_printing` | Blue progress bar | Printing |
 | `drivers_complete` | Blinking green | Print done (30 s, then idle) |
 
-Switch with `SET_LED_EFFECT EFFECT=<name> REPLACE=1`.
+Switch with `_STATUS_LED STATE=<state>` (e.g. `STATE=printing`), which runs `SET_LED_EFFECT EFFECT=drivers_<state> REPLACE=1`.
 
 ---
 
 ## 9. Macros
 
 ### `PRINT_START BED_TEMP= EXTRUDER_TEMP= SOAK=`
-Defaults: bed 60, extruder 210, soak 120 s.
+Defaults: bed 60, extruder 210, soak 120 s (`_CFG.soak_s`).
 1. LEDs loading, `G28`, `PREVIEW_PRINT_AREA`
 2. Bed heats, nozzle goes to 150 °C, `SMART_PARK`
 3. Waits for bed, soaks
@@ -309,7 +309,7 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 | `_ON_CANCEL` | `M84` + LEDs idle |
 
 ### Idle behaviour
-`[idle_timeout]` is 30 s: motors (except Z) release, then `heaters_off_when_idle` turns heaters off 270 s later unless something happened in between.
+`[idle_timeout]` is 30 s: motors (except Z) release, then `_HEATERS_OFF_WHEN_IDLE` (`macros/idle.cfg`) turns heaters off `_CFG.heaters_off_delay_s` (270 s) later unless something happened in between.
 
 ---
 
@@ -336,9 +336,18 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 ```
 README.md              # This file (the only root file Klipper-Backup keeps)
 printer_data/config/
-├── printer.cfg        # MCUs, steppers, heaters, probe, mesh, shaper
-├── macros.cfg         # Homing override, PRINT_START/END, purge, park, Z hold
-├── leds.cfg           # Case light and neopixel status effects
+├── printer.cfg        # Includes + SAVE_CONFIG block (PID, z_offset, mesh, shaper)
+├── hardware/          # What the machine IS: one file per subsystem, no macros
+│   ├── mcu, kinematics, axis_x, axis_y, axis_z, extruder
+│   └── bed, fans, accelerometers, display, leds
+├── macros/            # What the machine DOES
+│   ├── _settings.cfg  # _CFG (every shared tunable) + Mainsail's _CLIENT_VARIABLE
+│   ├── homing.cfg     # homing_override, _HOME_SENSORLESS, _HOMING_Z_HOP
+│   ├── motors.cfg     # _SET_CURRENT, Z hold, M84/M18
+│   ├── print.cfg      # PRINT_START/END, cancel hook
+│   ├── objects.cfg    # PREVIEW_PRINT_AREA, SMART_PARK, M_PURGE
+│   ├── idle.cfg, ui.cfg (_STATUS_LED, M300), tuning.cfg (TEST_SPEED)
+├── config_backups/    # Old copies, incl. pre-refactor-20261028/
 ├── moonraker.conf     # Moonraker, update manager, Spoolman, timelapse
 ├── crowsnest.conf     # Webcam streaming
 ├── smartlapse.conf    # Best-frame-per-layer timelapse
