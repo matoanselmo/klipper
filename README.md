@@ -234,7 +234,6 @@ Retraction is tuned live with `SET_RETRACTION`, so the file values may lag what'
 | Mesh area | 5,5 to 175,115 (probe coordinates), 8×8, bicubic |
 | Mesh fade | 1 to 10 mm |
 | Adaptive mesh | Every print, profile `adaptive`, margin 5 mm |
-| Saved full mesh | Profile `default` (don't overwrite it). ⚠️ Still the old 10×10 from the previous probe mount, so it's stale |
 | Z tilt | Motors at (260,45) and (-30,45), probes (0,160) and (185,160), 5 retries, 0.03 mm tolerance |
 
 The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from front to back, which is why a fresh adaptive mesh runs before every print.
@@ -243,7 +242,7 @@ The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from fron
 
 ## 7. Input shaping
 
-⚠️ **Currently disabled.** The `[input_shaper]` block is commented out in `printer.cfg` and no longer in SAVE_CONFIG. Last calibration (2026-10-12, ADXL345 on the EBB42 for X, LIS2DW on the bed for Y) was:
+⚠️ **Disabled on purpose for now.** The `[input_shaper]` block is commented out in `printer.cfg` and no longer in SAVE_CONFIG. Last calibration (2026-10-12, ADXL345 on the EBB42 for X, LIS2DW on the bed for Y) was:
 
 | Axis | Shaper | Frequency |
 |---|---|---|
@@ -363,12 +362,13 @@ smartlapse/
 
 Things that look off or are stale. Answer them here once checked.
 
-- [ ] **Input shaper is off.** Was that on purpose, or should it be re-run (the Y bed hardware may have changed)?
-- [ ] **`default` mesh is stale** (10×10 from the old probe mount). Re-run a full `BED_MESH_CALIBRATE` and save it?
-- [ ] **Homing comment** in `_settings.cfg` says the probe is 60 mm in front, but `y_offset` is -45. Which is right?
-- [ ] **Y idle current:** `_CFG.idle_current` has no Y entry, fine as long as that's intended.
+Nothing open right now.
 
 **Answered**
+- [x] **Input shaper off:** on purpose for now. (2026-11-05)
+- [x] **Stale `default` mesh:** to be removed. (2026-11-05)
+- [x] **Homing comment (60 mm vs 45 mm):** comment is wrong, the probe is 45 mm in front. (2026-11-05)
+- [x] **Y idle current:** removed on purpose. (2026-11-05)
 - [x] **Part cooling (Sept 30 log):** fixed by changing the fan duct. The fan pin swap was unrelated. (2026-10-12)
 - [x] **Heated bed (Sept 22 log):** the bed is warped. A denser mesh (10×10) plus Z tilt made it printable. (2026-10-12)
 - [x] **Y redesign:** only the motor swap so far. Linear rails, a PEI powder-coated sheet and a magnetic base are on the way. (2026-10-12)
