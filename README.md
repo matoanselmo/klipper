@@ -8,7 +8,7 @@ Printer notes, logbook and AI context for **Mimi3D**, a custom Klipper bed-sling
 > the config wins, and point out the mismatch so this file can be updated.
 > Sections marked **❓ Unconfirmed** are guesses or stale info waiting for the owner to verify.
 
-**Last reviewed:** 2026-10-12
+**Last reviewed:** 2026-11-05
 
 ---
 
@@ -24,7 +24,7 @@ Printer notes, logbook and AI context for **Mimi3D**, a custom Klipper bed-sling
 - The bed heater on `PC6` drives an **external MOSFET** on purpose. Don't flag it.
 - The probe is a **BLTouch clone (CR-Touch type)**. Don't enable `probe_with_touch_mode` or `stow_on_each_sample: False`.
 - The owner likes **quiet** motors. X, Y and Z run in StealthChop on purpose.
-- **Mind the DP5's shared DIAG pins.** The Y endstop is on PD2 (Z-STOP port, also D2's DIAG) and the runout sensor on PB3 (Y-STOP port, also D1's DIAG). Only X's DIAG jumper is installed.
+- **Mind the DP5's shared DIAG pins.** X and Y both home sensorless now, so the DIAG jumpers for D0 (PB4) and D1 (PB3) are on. Nothing may be plugged into the X-STOP or Y-STOP ports.
 - CAN errors (`Lost communication`, `bus_state=off`): **check the CAN cable first** before blaming the config.
 
 **This repo:** Klipper-Backup deletes anything in the repo that isn't in its backup paths, **except `README.md`**. So all notes live in this one file. Don't add other files at the repo root from GitHub; put them on the Pi inside a backed-up folder instead.
@@ -49,7 +49,7 @@ Printer notes, logbook and AI context for **Mimi3D**, a custom Klipper bed-sling
 | Nozzle / filament | 0.4 mm / 1.75 mm |
 | Hotend | TZ E3 V2 |
 | Extruder | BMG clone, Bowden, geared 50:17 |
-| Probe | BLTouch clone, offset X -42, Y 0 |
+| Probe | BLTouch clone, offset X 0, Y -45 |
 | Bed | 185×180 mm usable, Creality textured PC sheet, max 90 °C |
 | Hotend max temp | 300 °C |
 
@@ -67,8 +67,8 @@ Full pinout from Mellow's pin diagram. Driver slots are numbered D0 to D4 from r
 | Slot | EN | DIR | STEP | UART | DIAG | Mimi uses it for |
 |---|---|---|---|---|---|---|
 | D0 | PC2 | PC14 | PC15 | PC13 | PB4 | X (sensorless, DIAG jumper **on**) |
-| D1 | PA2 | PA0 | PA1 | PC3 | PB3 | Y (DIAG jumper **off**, PB3 is the runout sensor) |
-| D2 | PA6 | PA4 | PA5 | PA3 | PD2 | Z (DIAG jumper **off**, PD2 is the Y endstop) |
+| D1 | PA2 | PA0 | PA1 | PC3 | PB3 | Y (sensorless, DIAG jumper **on**) |
+| D2 | PA6 | PA4 | PA5 | PA3 | PD2 | Z (DIAG jumper **off**) |
 | D3 | PB0 | PC4 | PC5 | PA7 | PB5 | Z1 |
 | D4 | PB11 | PB2 | PB10 | PB1 | NC | **free**, reserved for 2WD Y |
 
@@ -102,8 +102,8 @@ Full pinout from Mellow's pin diagram. Driver slots are numbered D0 to D4 from r
 | Label | Pin | Mimi uses it for |
 |---|---|---|
 | X-STOP | PB4 | nothing plugged in (X is sensorless, PB4 is X's DIAG) |
-| Y-STOP | PB3 | Filament runout switch (`^PB3`) |
-| Z-STOP | PD2 | **Y endstop** (`^!PD2`) |
+| Y-STOP | PB3 | nothing plugged in (Y is sensorless, PB3 is Y's DIAG) |
+| Z-STOP | PD2 | free |
 
 **Expansion headers**
 
@@ -176,9 +176,9 @@ USB serial `/dev/serial/by-id/usb-Klipper_rp2040_5044340418AE361C-if00`. Stuck f
 | Axis | Motor | Current | Microsteps | Driver mode | Homing |
 |---|---|---|---|---|---|
 | X | Creality 42-34 (0.84 A rated) | 0.58 A (0.45 A while homing) | 16 | StealthChop | Sensorless, `driver_SGTHRS: 100`, toward -X |
-| Y | 17HS8401S (42-48, 1.7 A rated) | 1.2 A | 16 | StealthChop | Physical endstop at -50 |
-| Z / Z1 | 42-40 (~1.0 A rated) | 0.70 A run, 0.05 A idle hold | 64, interpolate off | StealthChop | BLTouch virtual endstop |
-| Extruder | 1.1 A motor | 0.65 A | 16, interpolate on | SpreadCycle (for pressure advance) | n/a |
+| Y | 17HS8401S (42-48, 1.7 A rated) | 1.2 A (0.80 A while homing) | 16 | StealthChop | Sensorless, `driver_SGTHRS: 50`, toward -Y (-50) |
+| Z / Z1 | Oukeda 17HS4401 | 0.70 A run, 0.40 A idle hold | 64, interpolate off | StealthChop, `autotune_tmc` silent on Z only (Z1's block is commented out) | BLTouch virtual endstop |
+| Extruder | 1.1 A motor | 0.8 A | 16, interpolate on | SpreadCycle (for pressure advance) | n/a |
 
 - All three axes are belt-driven, `rotation_distance: 40` on X, Y and Z.
 - X, Y and Z currents all sit at about 70% of each motor's rating.
@@ -190,8 +190,8 @@ USB serial `/dev/serial/by-id/usb-Klipper_rp2040_5044340418AE361C-if00`. Stuck f
 All numbers below are in `_CFG` (`macros/_settings.cfg`).
 1. Switches Z to run current, hops Z up 10 mm (`_HOMING_Z_HOP`, fakes Z position if Z isn't homed yet)
 2. X, then Y, via `_HOME_SENSORLESS`: drop to homing current (X 0.45 A, Y 0.80 A), ram the frame, back off to 10 mm, wait 0.5 s, ram again (`home_passes: 2`, like the Prusa Core One; the last ram sets the position), then return to the intended run/idle level recorded by `_SET_CURRENT`
-3. Z: moves to X120 Y95, probes, lifts to Z10
-4. Parks at X78 Y95
+3. Z: moves the nozzle to X88 Y150 (probe lands at Y105), probes, lifts to Z10
+4. Parks at X88 Y105
 
 Homing Z alone throws `Home X and Y before homing Z` if X/Y aren't homed.
 
@@ -200,7 +200,7 @@ Homing Z alone throws `Home X and Y before homing Z` if X/Y aren't homed.
 - `M84` / `M18` are overridden: they release X, Y and E only, clear X/Y homing, and drop Z to idle current. `[idle_timeout]`, `PRINT_END`, Mainsail's motors-off button and cancel all go through this.
 - `M84.1` is the real all-motors-off. Maintenance only.
 - Currents go through `_SET_CURRENT STEPPERS=<list> LEVEL=run|idle`: run comes from `hardware/`, idle from `_CFG.idle_current` (X 0.35 A, Z 0.40 A). Raise Z if the gantry creeps down. X is at run current only during prints.
-- The controller fan watches X, Y and E only, since Z is always on.
+- The controller fan watches X, Y, Z, Z1 and E. Z is always energised, so in practice the fan runs whenever the printer is on.
 
 ---
 
@@ -211,13 +211,13 @@ Homing Z alone throws `Home X and Y before homing Z` if X/Y aren't homed.
 | Hotend | TZ E3 V2 |
 | Extruder | BMG clone (dual drive), Bowden |
 | `gear_ratio` | 50:17 |
-| `rotation_distance` | 22.678 (calibrated 2026-10-09, was 22.52245) |
+| `rotation_distance` | 22.67 |
 | Pressure advance | 0.35 |
 | Firmware retraction | 4 mm @ 35 mm/s, unretract 35 mm/s, no extra |
-| `min_extrude_temp` | 200 °C |
+| `min_extrude_temp` | 200 °C (`min_temp` 15 °C) |
 | `max_extrude_cross_section` | 5 |
 | `max_extrude_only_distance` | 800 |
-| Hotend PID | Kp 42.293, Ki 10.443, Kd 42.822 |
+| Hotend PID | Kp 19.842, Ki 2.046, Kd 48.118 (tuned at 220 °C) |
 
 Retraction is tuned live with `SET_RETRACTION`, so the file values may lag what's actually in use.
 
@@ -228,22 +228,22 @@ Retraction is tuned live with `SET_RETRACTION`, so the file values may lag what'
 | Setting | Value |
 |---|---|
 | Bed thermistor | Generic 3950 |
-| Bed PID | Kp 67.670, Ki 1.465, Kd 781.591 |
-| Probe offset | X -42, Y 0 |
-| Probe `z_offset` | 1.519 (SAVE_CONFIG, 2026-10-09) |
-| Mesh area | 5,20 to 127,180 (probe coordinates), 10×10, bicubic |
+| Bed PID | Kp 54.086, Ki 0.828, Kd 883.634 (tuned at 60 °C) |
+| Probe offset | X 0, Y -45 (probe sits in front of the nozzle) |
+| Probe `z_offset` | 1.798 (SAVE_CONFIG) |
+| Mesh area | 5,5 to 175,115 (probe coordinates), 8×8, bicubic |
 | Mesh fade | 1 to 10 mm |
 | Adaptive mesh | Every print, profile `adaptive`, margin 5 mm |
-| Saved full mesh | Profile `default` (don't overwrite it) |
-| Z tilt | Motors at (260,45) and (-30,45), probes (20,95) and (185,95), 5 retries, 0.03 mm tolerance |
+| Saved full mesh | Profile `default` (don't overwrite it). ⚠️ Still the old 10×10 from the previous probe mount, so it's stale |
+| Z tilt | Motors at (260,45) and (-30,45), probes (0,160) and (185,160), 5 retries, 0.03 mm tolerance |
 
-The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from front to back, which is why the mesh is a dense 10×10 and runs fresh before every print.
+The bed is **warped**. The `default` mesh shows it rising about 0.8 mm from front to back, which is why a fresh adaptive mesh runs before every print.
 
 ---
 
 ## 7. Input shaping
 
-Calibrated 2026-10-12 with two chips: ADXL345 on the EBB42 for X, LIS2DW on the bed for Y.
+⚠️ **Currently disabled.** The `[input_shaper]` block is commented out in `printer.cfg` and no longer in SAVE_CONFIG. Last calibration (2026-10-12, ADXL345 on the EBB42 for X, LIS2DW on the bed for Y) was:
 
 | Axis | Shaper | Frequency |
 |---|---|---|
@@ -256,11 +256,11 @@ Calibrated 2026-10-12 with two chips: ADXL345 on the EBB42 for X, LIS2DW on the 
 
 ## 8. Fans, lights and sensors
 
-- **Part fan** (`ebb:PA0`): kick start 0.1 s, off below 15%.
-- **Hotend fan** (`ebb:PA1`): 75% power once the hotend passes 50 °C.
-- **Controller fan** (`PC9`): 25% while X/Y/E are enabled, off 60 s after.
+- **Part fan** (`ebb:PA1`): kick start 0.1 s, off below 15%.
+- **Hotend fan** (`ebb:PA0`): 100% once the hotend passes 50 °C.
+- **Controller fan** (`PC9`): 30% while any stepper is enabled, off 60 s after.
 - **Case light** (`PC8`): dimmable, boots at 50%, off on shutdown.
-- **Runout sensor** (`PB3`): pauses the print, 3 s event delay.
+- **Runout sensor:** removed (PB3 is now Y's DIAG).
 - **Temperature sensors:** `dp5_mcu`, `ebb_mcu`.
 
 ### LED effects (`hardware/leds.cfg`, all named `drivers_<state>`)
@@ -282,10 +282,10 @@ Switch with `_STATUS_LED STATE=<state>` (e.g. `STATE=printing`), which runs `SET
 
 ### `PRINT_START BED_TEMP= EXTRUDER_TEMP= SOAK=`
 Defaults: bed 60, extruder 210, soak 120 s (`_CFG.soak_s`).
-1. LEDs loading, `G28`, `PREVIEW_PRINT_AREA`
-2. Bed heats, nozzle goes to 150 °C, `SMART_PARK`
-3. Waits for bed, soaks
-4. Re-homes Z, `Z_TILT_ADJUST`
+1. Starts the bed heating right away, LEDs loading, `G28`, `PREVIEW_PRINT_AREA`
+2. Nozzle goes to 150 °C, `SMART_PARK`
+3. Waits for bed, soaks (skipped if the bed was already within 2 °C of target when the macro started), waits for the nozzle to hit 150 °C
+4. Re-homes Z, `Z_TILT_ADJUST`, re-homes Z again
 5. Adaptive mesh (profile `adaptive`)
 6. `SMART_PARK`, heats nozzle to full temp
 7. Drops to Z2, `M_PURGE`
@@ -300,12 +300,12 @@ Needs **label objects** enabled in Orca, otherwise the preview, park and purge f
 
 | Macro | Notes |
 |---|---|
-| `PRINT_END` | Retract 2 mm, lift Z10 (capped), park X100 Y150, heaters and fan off, `M84`, LEDs complete |
-| `M_PURGE` | 8×8 mm "M" at 0.28 mm, 4 mm in front of the objects (or left of them, or front edge). Primes 10 mm first. Override with `PURGE_X= PURGE_Y=` |
+| `PRINT_END` | Retract 2 mm, lift Z20 (capped), park X0 Y180, heaters and fan off, `M84`, LEDs complete |
+| `M_PURGE` | 8×8 mm "M" at 0.28 mm, `_CFG.purge_gap` (12 mm) from the objects. Tries front, left, right, then behind; falls back to the front edge with a warning. Primes 10 mm first. Override with `PURGE_X= PURGE_Y=` |
 | `SMART_PARK` | 10 mm in front/left of the objects at Z10, or bed centre with no objects |
 | `PREVIEW_PRINT_AREA` | Traces the objects' bounding box at Z10. Optional `Z_HOP= SPEED= MARGIN=` |
 | `TEST_SPEED` | Skipped-step test, e.g. `TEST_SPEED SPEED=300 ACCEL=5000 ITERATIONS=10` |
-| `_CLIENT_VARIABLE` | Mainsail pause/cancel: park X100 Y150, lift 10, park on cancel, firmware retraction, cancel calls `_ON_CANCEL` |
+| `_CLIENT_VARIABLE` | Mainsail pause/cancel: park X0 Y180, lift 20, park on cancel, firmware retraction, cancel calls `_ON_CANCEL` |
 | `_ON_CANCEL` | `M84` + LEDs idle |
 
 ### Idle behaviour
@@ -363,7 +363,10 @@ smartlapse/
 
 Things that look off or are stale. Answer them here once checked.
 
-Nothing open right now.
+- [ ] **Input shaper is off.** Was that on purpose, or should it be re-run (the Y bed hardware may have changed)?
+- [ ] **`default` mesh is stale** (10×10 from the old probe mount). Re-run a full `BED_MESH_CALIBRATE` and save it?
+- [ ] **Homing comment** in `_settings.cfg` says the probe is 60 mm in front, but `y_offset` is -45. Which is right?
+- [ ] **Y idle current:** `_CFG.idle_current` has no Y entry, fine as long as that's intended.
 
 **Answered**
 - [x] **Part cooling (Sept 30 log):** fixed by changing the fan duct. The fan pin swap was unrelated. (2026-10-12)
@@ -393,6 +396,9 @@ From 2026-10-02 on, reconstructed from the backup history, so dates are backup t
 
 | Date | Change |
 |---|---|
+| 2026-11-04 | Probe remounted in front of the nozzle (offset X -42 Y 0 to X 0 Y -45). Z tilt points, mesh area (now 8×8), homing and park spots moved to match. z_offset 1.798 |
+| 2026-11-04 | Y switched to sensorless homing on PB3, runout sensor removed. Input shaper disabled. Part/hotend fan pins swapped back (part fan `ebb:PA1`), hotend fan 100%, controller fan 30%. Gear ratio 3:1 to 50:17, extruder `min_temp` 15. Z1 autotune commented out. Hotend and bed re-PIDed |
+| 2026-11-04 | `PRINT_START`: bed heats first, soak skipped if already hot, Z re-homed after tilt. `M_PURGE` gap 12 mm with right/behind fallbacks. Pause/cancel/end park at X0 Y180, lift 20 |
 | 2026-10-12 | `max_velocity` typo fixed, 3000 to 300 |
 | 2026-10-12 | Printer notes moved into the README (Klipper-Backup deletes other root files). Smartlapse source and systemd unit added to the repo |
 | 2026-10-12 | Part fan and hotend fan pins swapped (part fan now `ebb:PA0`), hotend fan capped at 75%, Z removed from controller fan, Z idle hold current 0.35 A to 0.05 A |
